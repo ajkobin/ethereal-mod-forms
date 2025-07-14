@@ -1,0 +1,307 @@
+// FUNCTIONS
+
+function autReps(N,p,j)
+  ZZ := Integers();
+  GL2 := GL(2,Integers(N));
+  SL2 := SL(2,Integers(N));
+
+  i := SL2![0,-1,1,0];       
+  wInit := SL2![-1,1 ,-1,0];
+
+  if not p in [2,3] then
+    if j eq 0 then
+      auts := sub<GL2 | [wInit,-Identity(SL2)]>;
+    else 
+      auts := sub<GL2 | i>;
+    end if;
+  elif p eq 2 then
+    w := Random({w : w in Conjugates(SL2,wInit) |      w^2*(w^2*i*w)*w eq i * (w^2*i*w)  });
+    auts := sub<GL2 | [i,w]>;
+  elif p eq 3 then
+    w := Random({w : w in Conjugates(SL2,wInit) | i*w eq w^2*i});
+    auts := sub<GL2 | [i,w]>;
+  end if;
+  return auts;   
+end function;
+
+function signatureH(H,p,j : auts := {})
+    N := Characteristic(BaseRing(H));
+      GL2 := GL(2,ResidueClassRing(N));
+      generic := -Identity(H) in H select 2 else 1;
+    mPerm,perm := CosetAction(GL2,H);
+    auts := #(auts) eq 0 select autReps(N,p,j) else auts;
+      orbits     := {{i^(mPerm(aut)) : aut in auts} : i in GSet(perm)}; 
+      stackyness := {* #auts/(generic*#orb) : orb in orbits*};
+    return <N,p,j, <{*n : n in stackyness | n gt 1*}>>;  
+end function;
+
+function borel(N)
+  R := ResidueClassRing(N);
+  G := GL(2,R);  
+  gens := [G! [1,1,0,1]] 
+      cat [G![a,0,0,1] : a in [1..N] | IsCoprime(a,N) ]
+      cat [G![1,0,0,a] : a in [1..N] | IsCoprime(a,N) ];
+  return sub<G | gens>;
+end function;
+
+function nD(data,n)
+  D := data[1];
+  sig := data[2];
+  sPts := data[3];
+  return n*D + &+[Floor(n*sig[i])*sPts[i] : i in [1..#sig]];
+end function;
+
+function rrMultiplication(D1,D2)
+  R1,m1 := RiemannRochSpace(D1);
+  R2,m2 := RiemannRochSpace(D2);
+  R3,m3 := RiemannRochSpace(D1+D2);
+  i := Inverse(m3);
+  S := sub<R3|[i(m1(a)*m2(b))  : a in Basis(R1), b in Basis(R2)]>;
+  return S, m3, Dimension(S), Dimension(R3);
+end function;
+
+function getGeneratorsUpToDegree(data,N)
+  R,m := RiemannRochSpace(nD(data,1));
+  gens := [[m(b) : b in Basis(R)] ];
+  for i in [2..N] do
+    genImages := &cat[
+    [ &*[tup[j] : j in [1..#part]] : tup in CartesianProduct([gens[j] : j in part])]
+      : part in Partitions(i) | not part eq [i] ];
+    R,m := RiemannRochSpace(nD(data,i));
+    mInv := Inverse(m);
+    imgBas := Basis(sub<R|[mInv(f) : f in genImages]>);
+    gens[i] := [m(b) : b in ExtendBasis(imgBas, R) | not b in imgBas ];    
+  end for;
+  return gens;
+end function;
+
+PP<q> := PowerSeriesRing(GF(2));
+function heckeAction(f, ell) // f should have a_1 = 1, or else need to tweak starting place using init
+	exps := Exponents(f);
+	if #exps eq 0 then
+		init := 1;
+	else
+		init := exps[1];
+		end if;
+	coefs := Coefficients(f);
+	newcoefs := [];
+	for i in [1..#coefs] do
+		j := i+init-1; // Tracks actual term in q-expansion
+		k := ell*j;
+		if k lt #coefs then
+			newterm := coefs[k];
+			if j mod ell eq 0 then
+				m := Numerator(j/ell);
+				newterm := newterm+ell*coefs[m];
+				end if;
+			Append(~newcoefs, newterm);
+			end if;
+		end for;
+	Tf := &+[newcoefs[i]*q^i : i in [1..#newcoefs]] + O(q^(#newcoefs+1));
+	return Tf;
+	end function;
+
+function Uoperator(f, ell)
+	exps := Exponents(f);
+	if #exps eq 0 then
+		init := 1;
+	else
+		init := exps[1];
+		end if;
+	coefs := Coefficients(f);
+	Uf := &+[coefs[i]*q^(ell*i) : i in [1..#coefs]] + O(q^(ell*#coefs+1));
+	return Uf;
+	end function;
+
+// END FUNCTIONS
+
+
+
+
+// Example 1: Modular curve X_0(5)
+
+// Stacky structures
+
+N := 5;
+for tup in [[0, 0], [0, 1728], [2, 0], [3, 0]] do
+	signatureH(borel(N),tup[1],tup[2]);
+	end for;
+
+// Log canonical ring in tame characteristics (e.g. char p = 7)
+p := 7;
+g := 0; // genus of X is 0
+delta := 2; // X has 2 cusps
+B := 3*p; // generators bound from KZB
+F := GF(p);
+sig := [1/2, 1/2]; // signature of X as a stacky curve
+
+// Construct projective model of X (it's just P1 for this example)
+P3<x,y,z> := PolynomialRing(F, 3);
+P2 := ProjectiveSpace(P3);
+X := Curve(P2, x+y+z);
+// g := Genus(X); // should match g above
+
+// Construct log canonical divisor
+K := CanonicalDivisor(X);
+pts := RationalPoints(X);
+sPts := [Divisor(Random(pts)) : i in [1..#sig]];
+if delta eq 0 then
+	D := K;
+	else D := K + &+[Divisor(Random(pts)) : i in [1..delta]]; // log divisor
+	end if;
+
+// This code will return a list of dimensions of Riemann--Roch spaces up to weight B:
+//for k in [1..B] do
+//	kD := k*D + &+[Floor(k*sig[i])*Divisor(Random(pts)) : i in [1..#sig]];
+//	<k, Dimension(RiemannRochSpace(kD))>;
+//	end for;
+
+// Get generators
+gens := getGeneratorsUpToDegree(<D,sig,sPts>,B);
+[#gens[i] : i in [1..#gens]];
+
+// Get relations
+P := PolynomialRing(F, &cat([ [i : j in [1..#gens[i]]] : i in [1..#gens]] ));
+    P := ProjectiveSpace(P);
+      phi := map<X -> P | &cat(gens)>;
+      C := Image(phi);
+    [Degree(b) : b in MinimalBasis(C)];
+
+// Log canonical ring in characteristic 2
+
+p := 2;
+g := 0; // genus of X is 0
+delta := 2; // X has 2 cusps
+m := 1; // ramification jump at wild pts is 1
+B := 3*p; // generators bound from KZB
+
+F := GF(p);
+sig := [(p-1)*(m+1)/p]; // refined signature of X as a stacky curve
+
+// Construct projective model of X (it's just P1 for this example)
+P3<x,y,z> := PolynomialRing(F, 3);
+P2 := ProjectiveSpace(P3);
+X := Curve(P2, x+y+z);
+g := Genus(X); // should match g above
+
+// Construct log canonical divisor
+K := CanonicalDivisor(X);
+pts := RationalPoints(X);
+sPts := [Divisor(Random(pts)) : i in [1..#sig]];
+if delta eq 0 then
+	D := K;
+	else D := K + &+[Divisor(Random(pts)) : i in [1..delta]]; // log divisor
+	end if;
+
+// This code will return a list of dimensions of Riemann--Roch spaces up to weight B:
+//for k in [1..B] do
+//	kD := k*D + &+[Floor(k*sig[i])*Divisor(Random(pts)) : i in [1..#sig]];
+//	<k, Dimension(RiemannRochSpace(kD))>;
+//	end for;
+
+// Get generators
+gens := getGeneratorsUpToDegree(<D,sig,sPts>,B);
+[#gens[i] : i in [1..#gens]];
+
+// Get relations
+P := PolynomialRing(F, &cat([ [i : j in [1..#gens[i]]] : i in [1..#gens]] ));
+    P := ProjectiveSpace(P);
+      phi := map<X -> P | &cat(gens)>;
+      C := Image(phi);
+    [Degree(b) : b in MinimalBasis(C)];
+
+
+
+// Example 2: Modular forms of level Gamma_0(5)
+
+p := 2;
+N := 5;
+F<a> := GF(p^2);
+
+// Compute bases of classical modular forms
+M2 := ModularForms(N, 2);
+M4 := ModularForms(N, 4);
+B2 := Basis(M2);
+B4 := Basis(M4);
+prec := 1000; // set precision
+
+// Get mod 2 q-expansions:
+x2 := PP!qExpansion(B2[1], prec);
+a4 := PP!qExpansion(B4[1], prec);
+x4 := PP!qExpansion(B4[2], prec);
+y4 := PP!qExpansion(B4[3], prec);
+
+// Observe that y4 is a square
+y4+O(q^20);
+
+// Construct a square root
+coeffs := Coefficients(PP!qExpansion(B4[3], 2*prec));
+y2 := &+[q^((i+1)/2) : i in [1..#coeffs] | coeffs[i] ne 0] + O(q^((#coeffs+3)/2));
+y2^2-y4;
+
+// More relations:
+a4-x2^2;
+x4-(y2^2+x2*y2);
+
+
+
+// Example 3: Modular forms of level Gamma_0(65)
+
+p := 2;
+N := 65;
+F<a> := GF(p^2);
+M2 := ModularForms(N, 2);
+M4 := ModularForms(N, 4);
+B2 := Basis(M2);
+B4 := Basis(M4);
+prec := 1000;
+
+PP<q> := PowerSeriesRing(F);
+x1 := B2[1];
+x2 := B2[2];
+x3 := B2[3];
+x4 := B2[4];
+x5 := B2[5];
+x6 := B2[6];
+x7 := B2[7];
+x8 := B2[8];
+
+x1 := PP!qExpansion(x1, prec);
+x2 := PP!qExpansion(x2, prec);
+x3 := PP!qExpansion(x3, prec);
+x4 := PP!qExpansion(x4, prec);
+x5 := PP!qExpansion(x5, prec);
+x6 := PP!qExpansion(x6, prec);
+x7 := PP!qExpansion(x7, prec);
+x8 := PP!qExpansion(x8, prec);
+
+// Notice that B4[24] is a square mod 2
+B4[24]+O(q^200);
+
+// Construct a square root
+coeffs := Coefficients(PP!qExpansion(B4[24], 2*prec));
+x9 := &+[q^((i+25)/2) : i in [1..#coeffs] | coeffs[i] ne 0] + O(q^((#coeffs+3)/2)); // note: need to start at the correct exponent
+x9^2-B4[24];
+
+// Here's another square
+B4[9]+B4[13]+O(q^30);
+
+// Construct a square root
+coeffs := Coefficients(PP!qExpansion(B4[9]+B4[13], 2*prec));
+x10 := &+[q^((i+7)/2) : i in [1..#coeffs] | coeffs[i] ne 0] + O(q^((#coeffs+3)/2));
+x10^2-(B4[9]+B4[13]);
+
+// Newforms
+
+f1 := x2+x3+x5+x6;
+f2 := x2+x3+x5+x9;
+f3 := x2+x5+x6+x9;
+f4 := x2+x5+x9;
+E := [f1, f2, f3, f4];
+
+// Check they're eigenforms:
+for i in [1..#E] do
+	for ell in [3, 7, 11, 17, 19] do
+		<i, ell, heckeAction(E[i], ell)+O(q^100)>;
+		end for;
+	end for;
