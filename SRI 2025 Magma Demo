@@ -346,8 +346,8 @@ new2 := Newforms(M2)[2][1]; // irrational
 new3 := Newforms(M2)[3][1]; // irrational
 
 // See fields of definition for coefficients of n2, n3
-// Parent(n2);
-// Parent(n3);
+// Parent(new2);
+// Parent(new3);
 
 // Mod 2 q-expansion of n1
 n1 := PP!qExpansion(new1, prec);
