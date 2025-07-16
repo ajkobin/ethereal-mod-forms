@@ -1,5 +1,11 @@
-// FUNCTIONS
+// LOAD FUNCTIONS
 
+// The first few functions are for computing stacky structures of modular curves
+
+// Input: an integer.
+// Output: representatives of Aut E acting on E[N], 
+// 	where E is the elliptic curve over K with j(E) = j
+// 	and K is a field of characteristic p
 function autReps(N,p,j)
   ZZ := Integers();
   GL2 := GL(2,Integers(N));
@@ -24,6 +30,8 @@ function autReps(N,p,j)
   return auts;   
 end function;
 
+// Compute H structures and stackyness above 0 = 12^3 in characteristic p
+// Optional paramater auts for precomputed auts
 function signatureH(H,p,j : auts := {})
     N := Characteristic(BaseRing(H));
       GL2 := GL(2,ResidueClassRing(N));
@@ -35,6 +43,7 @@ function signatureH(H,p,j : auts := {})
     return <N,p,j, <{*n : n in stackyness | n gt 1*}>>;  
 end function;
 
+// Gamma0(N), used in demo below
 function borel(N)
   R := ResidueClassRing(N);
   G := GL(2,R);  
@@ -44,6 +53,19 @@ function borel(N)
   return sub<G | gens>;
 end function;
 
+// You can also experiment with Gamma1(N)
+function borel1(N)
+  R := ResidueClassRing(N);
+  G := GL(2,R);  
+  gens := [G! [1,1,0,1]] 
+      cat [G![1,0,0,a] : a in [1..N] | IsCoprime(a,N) ];
+  return sub<G | gens>;
+end function;
+
+
+// The next few functions are for computing canonical rings
+
+// Constructs stacky divisor
 function nD(data,n)
   D := data[1];
   sig := data[2];
@@ -51,6 +73,7 @@ function nD(data,n)
   return n*D + &+[Floor(n*sig[i])*sPts[i] : i in [1..#sig]];
 end function;
 
+// Multiplication functions
 function rrMultiplication(D1,D2)
   R1,m1 := RiemannRochSpace(D1);
   R2,m2 := RiemannRochSpace(D2);
@@ -60,6 +83,9 @@ function rrMultiplication(D1,D2)
   return S, m3, Dimension(S), Dimension(R3);
 end function;
 
+// Get generators of canonical ring
+// Input is [D, sig, sPts], and N (stopping degree)
+// Output is [gens1,...,gensN]
 function getGeneratorsUpToDegree(data,N)
   R,m := RiemannRochSpace(nD(data,1));
   gens := [[m(b) : b in Basis(R)] ];
@@ -74,6 +100,8 @@ function getGeneratorsUpToDegree(data,N)
   end for;
   return gens;
 end function;
+
+// The last two functions are for computing Hecke actions on q-expansions
 
 PP<q> := PowerSeriesRing(GF(2));
 function heckeAction(f, ell) // f should have a_1 = 1, or else need to tweak starting place using init
@@ -126,14 +154,20 @@ N := 5;
 for tup in [[0, 0], [0, 1728], [2, 0], [3, 0]] do
 	signatureH(borel(N),tup[1],tup[2]);
 	end for;
+// Output is <N, p, j, stackiness> where
+//	N = level
+//	p = characteristic
+//	j = stacky j-invariant
+//	stackiness = list of orders of nontrivial aut groups, with multiplicity
+//		e.g. <* 2^^2 *> means one two stacky points of order 2
 
-// Log canonical ring in tame characteristics (e.g. char p = 7)
+// Log canonical ring of X_0(5) in tame characteristics (e.g. char p = 7)
 p := 7;
 g := 0; // genus of X is 0
 delta := 2; // X has 2 cusps
-B := 3*p; // generators bound from KZB
-F := GF(p);
-sig := [1/2, 1/2]; // signature of X as a stacky curve
+B := 3*p; // degree bound from KZB
+F := GF(p); // may need to search over extensions of GF(p)
+sig := [1/2, 1/2]; // signature of X as a stacky curve, from stacky structure code above
 
 // Construct projective model of X (it's just P1 for this example)
 P3<x,y,z> := PolynomialRing(F, 3);
@@ -156,27 +190,25 @@ if delta eq 0 then
 //	<k, Dimension(RiemannRochSpace(kD))>;
 //	end for;
 
-// Get generators
+// Display number of generators in each degree up to degree bound
 gens := getGeneratorsUpToDegree(<D,sig,sPts>,B);
 [#gens[i] : i in [1..#gens]];
 
-// Get relations
+// Display degree of relations in minimal presentation of canonical ring
 P := PolynomialRing(F, &cat([ [i : j in [1..#gens[i]]] : i in [1..#gens]] ));
     P := ProjectiveSpace(P);
       phi := map<X -> P | &cat(gens)>;
       C := Image(phi);
     [Degree(b) : b in MinimalBasis(C)];
 
-// Log canonical ring in characteristic 2
-
+// Log canonical ring of X_0(5) in characteristic 2
 p := 2;
 g := 0; // genus of X is 0
 delta := 2; // X has 2 cusps
 m := 1; // ramification jump at wild pts is 1
-B := 3*p; // generators bound from KZB
-
-F := GF(p);
-sig := [(p-1)*(m+1)/p]; // refined signature of X as a stacky curve
+B := 3*p; // degree bound from KZB
+F := GF(p); // may need to search over extensions of GF(p)
+sig := [(p-1)*(m+1)/p]; // refined signature of stacky curve
 
 // Construct projective model of X (it's just P1 for this example)
 P3<x,y,z> := PolynomialRing(F, 3);
@@ -199,11 +231,11 @@ if delta eq 0 then
 //	<k, Dimension(RiemannRochSpace(kD))>;
 //	end for;
 
-// Get generators
+// Display number of generators in each degree up to degree bound
 gens := getGeneratorsUpToDegree(<D,sig,sPts>,B);
 [#gens[i] : i in [1..#gens]];
 
-// Get relations
+// Display degree of relations in minimal presentation of canonical ring
 P := PolynomialRing(F, &cat([ [i : j in [1..#gens[i]]] : i in [1..#gens]] ));
     P := ProjectiveSpace(P);
       phi := map<X -> P | &cat(gens)>;
@@ -211,12 +243,11 @@ P := PolynomialRing(F, &cat([ [i : j in [1..#gens[i]]] : i in [1..#gens]] ));
     [Degree(b) : b in MinimalBasis(C)];
 
 
-
-// Example 2: Modular forms of level Gamma_0(5)
+// Mod 2 mular forms of level Gamma_0(5)
 
 p := 2;
 N := 5;
-F<a> := GF(p^2);
+F := GF(p);
 
 // Compute bases of classical modular forms
 M2 := ModularForms(N, 2);
@@ -225,7 +256,7 @@ B2 := Basis(M2);
 B4 := Basis(M4);
 prec := 1000; // set precision
 
-// Get mod 2 q-expansions:
+// Get mod p q-expansions:
 x2 := PP!qExpansion(B2[1], prec);
 a4 := PP!qExpansion(B4[1], prec);
 x4 := PP!qExpansion(B4[2], prec);
@@ -245,16 +276,19 @@ x4-(y2^2+x2*y2);
 
 
 
-// Example 3: Modular forms of level Gamma_0(65)
+// Example 2: Modular forms of level Gamma_0(65)
+// Stacky structure code above runs fine on this example
+// Warning: canonical ring code runs slow
+//	(e.g. need to construct a model of X_0(65), which has genus 5)
 
 p := 2;
 N := 65;
-F<a> := GF(p^2);
+F<a> := GF(p^2); // there are irrational newforms to look for
 M2 := ModularForms(N, 2);
 M4 := ModularForms(N, 4);
 B2 := Basis(M2);
 B4 := Basis(M4);
-prec := 1000;
+prec := 1000; // set precision
 
 PP<q> := PowerSeriesRing(F);
 x1 := B2[1];
@@ -305,3 +339,20 @@ for i in [1..#E] do
 		<i, ell, heckeAction(E[i], ell)+O(q^100)>;
 		end for;
 	end for;
+
+// Classical newforms
+new1 := Newforms(M2)[1][1];
+new2 := Newforms(M2)[2][1]; // irrational
+new3 := Newforms(M2)[3][1]; // irrational
+
+// See fields of definition for coefficients of n2, n3
+// Parent(n2);
+// Parent(n3);
+
+// Mod 2 q-expansion of n1
+n1 := PP!qExpansion(new1, prec);
+n1-f1;
+
+// q-expansions for n2, n3 aren't implemented yet
+// but they should reduce to the following mod 2 newform
+n2 := q+a*q^2+(1+a)*q^3+q^4+q^5+(1+a)*q^6+a*q^8+q^9+a*q^10+(1+a)*q^11+O(q^12);
